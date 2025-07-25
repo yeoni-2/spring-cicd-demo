@@ -5,7 +5,7 @@ on:
         branches: [master]
 
 env:
-  DOKER_REGISTRY: docker.io
+  DOCKER_REGISTRY: docker.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
@@ -34,7 +34,7 @@ jobs:
                 name: jar-artifact
                 path: target/*.jar
 
-    doker-build-push:
+    docker-build-push:
       needs: build-and-test
       runs-on: ubuntu-latest
       if: github.ref == 'refs/heads/master' && github.event_name == 'push'
