@@ -4,8 +4,12 @@ on:
     push:
         branches: [master]
 
+env:
+  DOKER_REGISTRY: docker.io
+  IMAGE_NAME: ${{ github.repository }}
+
 jobs:
-    build:
+    build-and-test:
         runs-on: ubuntu-latest
         
         steps:
@@ -24,6 +28,55 @@ jobs:
             - name: Maven 빌드
               run: mvn clean package
               
-          # 결과 확인  
-            - name: 빌드 결과 확인
-              run: ls -la target/
+            - name: 빌드 아틱팩트 업로드
+              uses: actions/upload-artifact@v3
+              with:
+                name: jar-artifact
+                path: target/*.jar
+
+    doker-build-push:
+      needs: build-and-test
+      runs-on: ubuntu-latest
+      if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+
+      steps:
+        - uses: actions/checkout@v3
+
+        - name: JAR 다운로드
+          uses: actions/download-artifact@v3
+          with:
+            name: jar-artifact
+            path: target/
+
+        - name: Dockerfile 생성
+          run: |
+            cat > Dockerfile << 'EOF'
+            FROM openjdk:17-jdk-slim
+            WORKDIR /app
+            COPY target/*.jar app.jar
+            EXPOSE 8080
+            ENTRYPOINT ["java", "-jar", "app.jar"]
+            EOF
+            
+            - name: Docker Hub 로그인
+              uses: docker/login-action@v2
+              with:
+                username: ${{ secrets.DOCKER_USERNAME }}
+                password: ${{ secrets.DOCKER_PASSWORD }}
+                
+            - name: Docker 이미지 빌드 및 푸시
+              uses: docker/build-push-action@v4
+              with:
+                context: .
+                push: true
+                tags:
+                  ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+                  ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+#
+#            - name: 원격 서버 배포
+#              uses: appleboy/ssh-action@v0.1.5
+#              with:
+#                host:
+#                username:
+#                key:
+#              script: doker run -p 8080:8080 ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME }}
